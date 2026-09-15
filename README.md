@@ -14,16 +14,6 @@ Or install it once:
     curl -fsSL https://raw.githubusercontent.com/actuallyaryaman/kde-material-you-theme-sync/main/scripts/theme-sync -o ~/.local/bin/theme-sync
     chmod +x ~/.local/bin/theme-sync
 
-```
-frame (titlebar): #111817
-palette: ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██ ██
-synced from MaterialYouDark:
-  alacritty → …
-  …
-check ok: all 8 themes match MaterialYouDark (#98cdcc); shared bg #111817
-restarted vicinae daemon
-```
-
 ## Requirements
 
 [**kde-material-you-colors**](https://github.com/luisbocanegra/kde-material-you-colors)
