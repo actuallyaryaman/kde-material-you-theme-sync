@@ -39,28 +39,3 @@ then add the **KDE Material You Colors** Plasma 6 widget from the KDE Store.
 
 The titlebar frame = WM active background darkened to `scale` (default `0.59`).
 If the frame looks off, override it in `config/knobs.conf`.
-
-## Palette
-
-Swatches generated from the active wallpaper by `kde-material-you-colors`:
-
-<p>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#070c0c;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#131b1b;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#1d2827;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#336767;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#dce8e7;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#a2adad;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#6d7877;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#98cdcc;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#b0cccb;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#0c4848;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#FF7352;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#31C193;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#FA9A24;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#45A8D2;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#B489F3;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#3bb4b2;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#1d2827;border:1px solid #333"></span>
-<span style="display:inline-block;width:2.2em;height:2.2em;background:#111817;border:1px solid #333"></span>
-</p>
