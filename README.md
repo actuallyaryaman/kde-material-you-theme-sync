@@ -44,10 +44,23 @@ If the frame looks off, override it in `config/knobs.conf`.
 
 Swatches generated from the active wallpaper by `kde-material-you-colors`:
 
-| Surface | Accent | Semantic |
-|---|---|---|
-| <span style="display:inline-block;width:1em;height:1em;background:#070c0c">　</span> bg `#070c0c` | <span style="display:inline-block;width:1em;height:1em;background:#98cdcc">　</span> accent `#98cdcc` | <span style="display:inline-block;width:1em;height:1em;background:#FF7352">　</span> red `#FF7352` |
-| <span style="display:inline-block;width:1em;height:1em;background:#131b1b">　</span> surface0 `#131b1b` | <span style="display:inline-block;width:1em;height:1em;background:#b0cccb">　</span> accent_hover `#b0cccb` | <span style="display:inline-block;width:1em;height:1em;background:#31C193">　</span> green `#31C193` |
-| <span style="display:inline-block;width:1em;height:1em;background:#1d2827">　</span> surface1 `#1d2827` | <span style="display:inline-block;width:1em;height:1em;background:#0c4848">　</span> accent_fg `#0c4848` | <span style="display:inline-block;width:1em;height:1em;background:#FA9A24">　</span> yellow `#FA9A24` |
-| <span style="display:inline-block;width:1em;height:1em;background:#336767">　</span> hover `#336767` | <span style="display:inline-block;width:1em;height:1em;background:#3bb4b2">　</span> cyan `#3bb4b2` | <span style="display:inline-block;width:1em;height:1em;background:#45A8D2">　</span> blue `#45A8D2` |
-| <span style="display:inline-block;width:1em;height:1em;background:#111817">　</span> frame `#111817` | | <span style="display:inline-block;width:1em;height:1em;background:#B489F3">　</span> magenta `#B489F3` |
+<p>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#070c0c;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#131b1b;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#1d2827;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#336767;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#dce8e7;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#a2adad;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#6d7877;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#98cdcc;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#b0cccb;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#0c4848;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#FF7352;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#31C193;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#FA9A24;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#45A8D2;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#B489F3;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#3bb4b2;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#1d2827;border:1px solid #333"></span>
+<span style="display:inline-block;width:2.2em;height:2.2em;background:#111817;border:1px solid #333"></span>
+</p>
