@@ -1,0 +1,95 @@
+{
+    "logo": {
+        "type": "small",
+        "padding": {
+            "top": 1,
+            "right": 2
+        }
+    },
+    "display": {
+        "separator": ">  ",
+        "color": {
+            "separator": "#6d7877"
+        },
+        "constants": [
+            "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+            "\u2502\u001b[75C\u2502\u001b[75D"
+        ]
+    },
+    "modules": [
+        {
+            "format": "{#1}{#keys}\u256d{$1}\u256e\u001b[76D {user-name-colored}{at-symbol-colored}{host-name-colored} \ud83d\udda5  ",
+            "type": "title"
+        },
+        {
+            "key": "{$2}{#31}\uf013 kernel   ",
+            "type": "kernel"
+        },
+        {
+            "key": "{$2}{#32}\udb80\udd50 uptime   ",
+            "type": "uptime"
+        },
+        {
+            "key": "{$2}{#33}{icon} distro   ",
+            "type": "os"
+        },
+        {
+            "key": "{$2}{#34}\udb80\uddc4 desktop  ",
+            "type": "de"
+        },
+        {
+            "key": "{$2}{#35}\ue795 term     ",
+            "type": "terminal"
+        },
+        {
+            "key": "{$2}{#36}\uf489 shell    ",
+            "type": "shell"
+        },
+        {
+            "key": "{$2}{#35}\udb80\udf5b cpu      ",
+            "type": "cpu",
+            "showPeCoreCount": true,
+            "temp": true
+        },
+        {
+            "key": "{$2}{#34}\udb80\udf5b gpu      ",
+            "type": "gpu"
+        },
+        {
+            "key": "{$2}{#33}\udb80\ude49 disk     ",
+            "type": "disk",
+            "folders": "/"
+        },
+        {
+            "key": "{$2}{#32}\uefc5 memory   ",
+            "type": "memory"
+        },
+        {
+            "key": "{$2}{#31}\udb82\ude5f network  ",
+            "type": "localip",
+            "format": "{ipv4} ({ifname})"
+        },
+        {
+            "format": "{#1}{#keys}\u251c{$1}\u2524",
+            "type": "custom"
+        },
+        {
+            "key": "{$2}{#39}\uefcc colors   ",
+            "type": "colors",
+            "symbol": "circle"
+        },
+        {
+            "format": "{#1}{#keys}\u2570{$1}\u256f",
+            "type": "custom"
+        }
+    ],
+    "colors": {
+        "title": "#98cdcc",
+        "keys": "#45A8D2",
+        "dots": "#dce8e7",
+        "section": "#98cdcc",
+        "danger": "#FF7352",
+        "warning": "#FA9A24",
+        "success": "#31C193"
+    }
+}

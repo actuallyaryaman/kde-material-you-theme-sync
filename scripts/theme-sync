@@ -1,0 +1,955 @@
+#!/usr/bin/env python3
+from configparser import ConfigParser
+import json, os, re, subprocess, sys
+
+SCHEMES = os.path.expanduser("~/.local/share/color-schemes")
+VAULT = "/home/logic/windows/Users/logic/Desktop/Obsidian/.obsidian"
+ALACRITTY = os.path.expanduser("~/.config/alacritty/material-you.toml")
+OPENCODE = os.path.expanduser("~/.config/opencode/themes/material-you.json")
+OBSIDIAN = os.path.join(VAULT, "themes", "MaterialYou", "theme.css")
+BTOP = os.path.expanduser("~/.config/btop/themes/material-you.theme")
+FASTFETCH = os.path.expanduser("~/.config/fastfetch/config.jsonc")
+VICINAE = os.path.expanduser("~/.local/share/vicinae/themes/material-you.toml")
+QBITTORRENT = os.path.expanduser("~/.config/qBittorrent/themes/material-you/config.json")
+QBIT_CONF = os.path.expanduser("~/.config/qBittorrent/qBittorrent.conf")
+VSCODIUM = os.path.expanduser("~/.config/VSCodium/User/settings.json")
+VSCODIUM_EXT = os.path.expanduser("~/.vscode-oss/extensions/theme-sync.material-you-theme-1.0.0")
+VSCODIUM_THEME = os.path.join(VSCODIUM_EXT, "themes", "material-you-color-theme.json")
+VSCODIUM_PKG = os.path.join(VSCODIUM_EXT, "package.json")
+KNOBS = os.path.expanduser("~/.config/theme-sync/config")
+DEFAULT_SCALE = 0.59
+
+ESC = "\u001b"
+DEFAULT_FASTFETCH = {
+    "logo": {"type": "small", "padding": {"top": 1, "right": 2}},
+    "display": {
+        "separator": ">  ",
+        "color": {"separator": "red"},
+        "constants": [
+            "─" * 75,
+            f"│{ESC}[75C│{ESC}[75D",
+        ],
+    },
+    "modules": [
+        {"format": f"{{#1}}{{#keys}}╭{{$1}}╮{ESC}[76D {{user-name-colored}}{{at-symbol-colored}}{{host-name-colored}} 🖥  ", "type": "title"},
+        {"key": "{$2}{#31} kernel   ", "type": "kernel"},
+        {"key": "{$2}{#32}󰅐 uptime   ", "type": "uptime"},
+        {"key": "{$2}{#33}{icon} distro   ", "type": "os"},
+        {"key": "{$2}{#34}󰇄 desktop  ", "type": "de"},
+        {"key": "{$2}{#35} term     ", "type": "terminal"},
+        {"key": "{$2}{#36} shell    ", "type": "shell"},
+        {"key": "{$2}{#35}󰍛 cpu      ", "type": "cpu", "showPeCoreCount": True, "temp": True},
+        {"key": "{$2}{#34}󰍛 gpu      ", "type": "gpu"},
+        {"key": "{$2}{#33}󰉉 disk     ", "type": "disk", "folders": "/"},
+        {"key": "{$2}{#32} memory   ", "type": "memory"},
+        {"key": "{$2}{#31}󰩟 network  ", "type": "localip", "format": "{ipv4} ({ifname})"},
+        {"format": "{#1}{#keys}├{$1}┤", "type": "custom"},
+        {"key": "{$2}{#39} colors   ", "type": "colors", "symbol": "circle"},
+        {"format": "{#1}{#keys}╰{$1}╯", "type": "custom"},
+    ],
+}
+
+
+def hex2rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def rgb2hex(rgb):
+    return "#%02x%02x%02x" % tuple(max(0, min(255, round(c))) for c in rgb)
+
+
+PALETTE_KEYS = ("bg", "surface0", "surface1", "hover", "fg", "fg_window", "fg_muted",
+                "accent", "accent_hover", "accent_fg",
+                "red", "green", "yellow", "blue", "magenta", "cyan", "wm", "frame")
+
+
+def palette_swatch(p):
+    return " ".join(f"\033[38;2;{'{};{};{}'.format(*hex2rgb(p[k]))}m██\033[0m" for k in PALETTE_KEYS)
+
+
+def mix(a, b, t):
+    return rgb2hex(tuple(x + (y - x) * t for x, y in zip(hex2rgb(a), hex2rgb(b))))
+
+
+def parse_wm_bg(val):
+    val = val.strip()
+    if val.startswith("#"):
+        return "#" + val[1:][-6:]
+    return rgb2hex(tuple(int(x) for x in val.split(",")[:3]))
+
+
+def read_knobs():
+    k = {"scale": DEFAULT_SCALE, "override": ""}
+    try:
+        with open(KNOBS) as f:
+            for line in f:
+                line = line.split("#", 1)[0].strip()
+                if not line or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                k[key.strip()] = val.strip()
+        k["scale"] = float(k["scale"])
+    except Exception:
+        pass
+    return k
+
+
+def frame_for(wm):
+    over = os.environ.get("THEME_SYNC_FRAME")
+    if over:
+        return over.strip()
+    k = read_knobs()
+    if k["override"]:
+        return k["override"]
+    return mix(wm, "#000000", 1 - k["scale"])
+
+
+def read_scheme(path):
+    cp = ConfigParser(interpolation=None)
+    with open(path) as f:
+        cp.read_file(f)
+    sec = lambda s: cp[s]
+    g = lambda d, k: d[k.lower()]
+    V, W, S, B = sec("Colors:View"), sec("Colors:Window"), sec("Colors:Selection"), sec("Colors:Button")
+    p = dict(
+        bg=g(V, "BackgroundNormal"),
+        surface0=g(W, "BackgroundNormal"),
+        surface1=g(B, "BackgroundAlternate"),
+        hover=g(V, "DecorationHover"),
+        fg=g(V, "ForegroundNormal"),
+        fg_window=g(W, "ForegroundNormal"),
+        fg_muted=g(V, "ForegroundInactive"),
+        accent=g(S, "BackgroundNormal"),
+        accent_hover=g(S, "DecorationHover"),
+        accent_fg=g(S, "ForegroundNormal"),
+        red=g(V, "ForegroundNegative"),
+        green=g(V, "ForegroundPositive"),
+        yellow=g(V, "ForegroundNeutral"),
+        blue=g(V, "ForegroundLink"),
+        magenta=g(V, "ForegroundVisited"),
+    )
+    p["cyan"] = mix(p["blue"], p["green"], 0.5)
+    p["wm"] = parse_wm_bg(cp.get("WM", "activebackground", fallback=p["bg"]))
+    p["frame"] = frame_for(p["wm"])
+    return p
+
+
+def active_scheme():
+    cp = ConfigParser(interpolation=None)
+    cp.read(os.path.expanduser("~/.config/kdeglobals"))
+    name = cp.get("General", "ColorScheme", fallback="")
+    if name:
+        p = os.path.join(SCHEMES, name + ".colors")
+        if os.path.exists(p):
+            return p, name
+    for cand in ("MaterialYouDark.colors", "MaterialYouLight.colors"):
+        p = os.path.join(SCHEMES, cand)
+        if os.path.exists(p):
+            return p, cand
+    sys.exit("No KDE Material You scheme found in " + SCHEMES)
+
+
+def gen_alacritty(p):
+    b = {k: mix(v, p["fg"], 0.3) for k, v in p.items()}
+    d = {k: mix(v, p["frame"], 0.3) for k, v in p.items()}
+    return f"""# Generated by theme-sync. Re-run theme-sync to regenerate.
+[colors.primary]
+background = '{p['frame']}'
+foreground = '{p['fg']}'
+bright_foreground = '{p['fg']}'
+dim_foreground = '{p['fg_window']}'
+
+[colors.cursor]
+text = '{p['frame']}'
+cursor = '{p['accent']}'
+
+[colors.vi_mode_cursor]
+text = '{p['frame']}'
+cursor = '{p['blue']}'
+
+[colors.search.matches]
+foreground = '{p['frame']}'
+background = '{p['accent']}'
+
+[colors.search.focused_match]
+foreground = '{p['frame']}'
+background = '{p['green']}'
+
+[colors.footer_bar]
+foreground = '{p['frame']}'
+background = '{p['fg_muted']}'
+
+[colors.hints.start]
+foreground = '{p['frame']}'
+background = '{p['yellow']}'
+
+[colors.hints.end]
+foreground = '{p['frame']}'
+background = '{p['fg_muted']}'
+
+[colors.selection]
+text = '{p['accent_fg']}'
+background = '{p['accent']}'
+
+[colors.normal]
+black   = '{p['surface0']}'
+red     = '{p['red']}'
+green   = '{p['green']}'
+yellow  = '{p['yellow']}'
+blue    = '{p['blue']}'
+magenta = '{p['magenta']}'
+cyan    = '{p['cyan']}'
+white   = '{p['fg_window']}'
+
+[colors.bright]
+black   = '{p['surface1']}'
+red     = '{b['red']}'
+green   = '{b['green']}'
+yellow  = '{b['yellow']}'
+blue    = '{b['blue']}'
+magenta = '{b['magenta']}'
+cyan    = '{b['cyan']}'
+white   = '{p['fg']}'
+
+[colors.dim]
+black   = '{d['surface0']}'
+red     = '{d['red']}'
+green   = '{d['green']}'
+yellow  = '{d['yellow']}'
+blue    = '{d['blue']}'
+magenta = '{d['magenta']}'
+cyan    = '{d['cyan']}'
+white   = '{d['fg_window']}'
+"""
+
+
+def oc(p):
+    add = mix(p["frame"], p["green"], 0.15)
+    rem = mix(p["frame"], p["red"], 0.15)
+    return dict(
+        primary=p["accent"], secondary=p["fg_window"], accent=p["accent"],
+        error=p["red"], warning=p["yellow"], success=p["green"], info=p["blue"],
+        text=p["fg"], textMuted=p["fg_muted"],
+        background=p["frame"], backgroundPanel=p["frame"],
+        backgroundElement=p["surface0"],
+        border=p["surface0"], borderActive=p["accent"], borderSubtle=p["surface0"],
+        diffAdded=p["green"], diffRemoved=p["red"], diffContext=p["fg_muted"],
+        diffHunkHeader=p["accent"], diffHighlightAdded=p["green"],
+        diffHighlightRemoved=p["red"], diffAddedBg=add, diffRemovedBg=rem,
+        diffContextBg=p["frame"], diffLineNumber=p["fg_muted"],
+        diffAddedLineNumberBg=add, diffRemovedLineNumberBg=rem,
+        markdownText=p["fg"], markdownHeading=p["accent"], markdownLink=p["blue"],
+        markdownLinkText=p["blue"], markdownCode=p["green"],
+        markdownBlockQuote=p["fg_window"], markdownEmph=p["yellow"],
+        markdownStrong=p["fg"], markdownHorizontalRule=p["fg_muted"],
+        markdownListItem=p["yellow"], markdownListEnumeration=p["yellow"],
+        markdownImage=p["blue"], markdownImageText=p["blue"],
+        markdownCodeBlock=p["fg_muted"],
+        syntaxComment=p["fg_muted"], syntaxKeyword=p["accent"],
+        syntaxFunction=p["blue"], syntaxVariable=p["yellow"],
+        syntaxString=p["green"], syntaxNumber=p["magenta"],
+        syntaxType=p["fg_window"], syntaxOperator=p["accent"],
+        syntaxPunctuation=p["fg_window"],
+    )
+
+
+def gen_opencode(dark, light):
+    d, l = oc(dark), oc(light)
+    theme = {k: {"dark": d[k], "light": l[k]} for k in d}
+    return json.dumps({"$schema": "https://opencode.ai/theme.json",
+                       "theme": theme}, indent=2) + "\n"
+
+
+def gen_btop(p):
+    h = lambda c: c[1:]
+    mm = lambda a, b: h(mix(a, b, 0.5))
+    ok = lambda c: h(mix(c, p["frame"], 0.2))
+    return f"""# Generated by theme-sync. Re-run theme-sync to regenerate.
+theme[main_bg]="#{h(p['frame'])}"
+theme[main_fg]="#{h(p['fg'])}"
+theme[title]="#{h(p['accent'])}"
+theme[hi_fg]="#{h(p['accent'])}"
+theme[selected_bg]="#{h(p['surface0'])}"
+theme[selected_fg]="#{h(p['accent'])}"
+theme[inactive_fg]="#{h(p['fg_muted'])}"
+theme[graph_text]="#{h(p['fg_window'])}"
+theme[meter_bg]="#{ok(p['surface0'])}"
+theme[proc_misc]="#{h(p['accent'])}"
+theme[cpu_box]="#{h(p['accent'])}"
+theme[mem_box]="#{h(p['green'])}"
+theme[net_box]="#{h(p['blue'])}"
+theme[proc_box]="#{h(p['magenta'])}"
+theme[div_line]="#{h(mix(p['frame'], p['fg_muted'], 0.35))}"
+theme[temp_start]="#{h(p['green'])}"
+theme[temp_mid]="#{h(p['yellow'])}"
+theme[temp_end]="#{h(p['red'])}"
+theme[cpu_start]="#{h(p['blue'])}"
+theme[cpu_mid]="#{mm(p['blue'], p['accent'])}"
+theme[cpu_end]="#{h(p['accent'])}"
+theme[free_start]="#{h(p['magenta'])}"
+theme[free_mid]="#{mm(p['magenta'], p['blue'])}"
+theme[free_end]="#{h(p['blue'])}"
+theme[cached_start]="#{mm(p['blue'], p['accent'])}"
+theme[cached_mid]="#{h(p['blue'])}"
+theme[cached_end]="#{h(p['accent'])}"
+theme[available_start]="#{h(p['yellow'])}"
+theme[available_mid]="#{mm(p['yellow'], p['red'])}"
+theme[available_end]="#{h(p['red'])}"
+theme[used_start]="#{h(p['green'])}"
+theme[used_mid]="#{mm(p['green'], p['blue'])}"
+theme[used_end]="#{h(p['blue'])}"
+theme[download_start]="#{h(p['yellow'])}"
+theme[download_mid]="#{mm(p['yellow'], p['red'])}"
+theme[download_end]="#{h(p['red'])}"
+theme[upload_start]="#{h(p['green'])}"
+theme[upload_mid]="#{mm(p['green'], p['blue'])}"
+theme[upload_end]="#{h(p['blue'])}"
+theme[process_start]="#{h(p['blue'])}"
+theme[process_mid]="#{mm(p['blue'], p['magenta'])}"
+theme[process_end]="#{h(p['magenta'])}"
+"""
+
+
+def gen_vicinae(p):
+    h = lambda c: c[1:] if c.startswith("#") else c
+    sel = mix(p["accent"], p["frame"], 0.25)
+    return f"""# Generated by theme-sync. Re-run theme-sync to regenerate.
+[meta]
+version = 1
+name = "Material You"
+description = "Generated from the KDE Material You color scheme"
+variant = "dark"
+inherits = "vicinae-dark"
+
+[colors.core]
+accent = "#{h(p['accent'])}"
+accent_foreground = "#{h(p['accent_fg'])}"
+background = "#{h(p['frame'])}"
+foreground = "#{h(p['fg'])}"
+secondary_background = "#{h(p['surface0'])}"
+border = "#{h(p['surface0'])}"
+
+[colors.main_window]
+border = "#{h(p['surface0'])}"
+footer = {{ background = "colors.core.secondary_background" }}
+
+[colors.accents]
+blue = "#{h(p['blue'])}"
+green = "#{h(p['green'])}"
+magenta = "#{h(p['magenta'])}"
+orange = "#{h(p['yellow'])}"
+red = "#{h(p['red'])}"
+yellow = "#{h(mix(p['yellow'], p['fg'], 0.35))}"
+cyan = "#{h(p['cyan'])}"
+purple = "#{h(p['magenta'])}"
+
+[colors.text]
+default = "colors.core.foreground"
+muted = "#{h(p['fg_muted'])}"
+danger = "#{h(p['red'])}"
+success = "#{h(p['green'])}"
+placeholder = "#{h(p['fg_muted'])}"
+selection = {{ background = "#{h(p['accent'])}", foreground = "#{h(p['accent_fg'])}" }}
+
+[colors.text.links]
+default = "#{h(p['blue'])}"
+visited = "#{h(p['magenta'])}"
+
+[colors.input]
+border = "#{h(p['surface0'])}"
+border_focus = "#{h(p['accent'])}"
+border_error = "#{h(p['red'])}"
+
+[colors.button.primary]
+background = "#{h(p['surface0'])}"
+foreground = "#{h(p['fg'])}"
+hover = {{ background = "#{h(mix(p['surface0'], p['accent'], 0.25))}" }}
+focus = {{ outline = "colors.core.accent" }}
+
+[colors.list.item.hover]
+foreground = "#{h(p['fg'])}"
+secondary_foreground = "#{h(p['fg_window'])}"
+
+[colors.list.item.selection]
+background = "#{h(sel)}"
+foreground = "#{h(p['fg'])}"
+secondary_background = "#{h(sel)}"
+secondary_foreground = "#{h(p['fg'])}"
+
+[colors.grid.item]
+background = "#{h(p['surface0'])}"
+hover = {{ outline = "#{h(p['fg_muted'])}" }}
+selection = {{ outline = "#{h(p['accent'])}" }}
+
+[colors.scrollbars]
+background = "#{h(p['surface0'])}"
+
+[colors.loading]
+bar = "#{h(p['accent'])}"
+spinner = "#{h(p['fg'])}"
+"""
+    return raw
+
+
+def gen_qbittorrent(p):
+    colors = {
+        "Palette.Window": p["frame"],
+        "Palette.WindowText": p["fg"],
+        "Palette.Base": p["surface0"],
+        "Palette.AlternateBase": p["surface0"],
+        "Palette.Text": p["fg"],
+        "Palette.ToolTipBase": p["surface0"],
+        "Palette.ToolTipText": p["fg"],
+        "Palette.BrightText": p["accent"],
+        "Palette.Highlight": p["accent"],
+        "Palette.HighlightedText": p["accent_fg"],
+        "Palette.Button": p["surface0"],
+        "Palette.ButtonText": p["fg"],
+        "Palette.Link": p["blue"],
+        "Palette.LinkVisited": p["magenta"],
+        "Palette.Light": p["surface1"],
+        "Palette.Midlight": p["surface0"],
+        "Palette.Mid": p["surface1"],
+        "Palette.Dark": p["frame"],
+        "Palette.Shadow": p["frame"],
+        "Palette.WindowTextDisabled": p["fg_muted"],
+        "Palette.TextDisabled": p["fg_muted"],
+        "Palette.ToolTipTextDisabled": p["fg_muted"],
+        "Palette.BrightTextDisabled": p["fg_muted"],
+        "Palette.HighlightedTextDisabled": p["fg_muted"],
+        "Palette.ButtonTextDisabled": p["fg_muted"],
+        "Log.TimeStamp": p["fg_muted"],
+        "Log.Normal": p["fg"],
+        "Log.Info": p["accent"],
+        "Log.Warning": p["yellow"],
+        "Log.Critical": p["red"],
+        "Log.BannedPeer": p["red"],
+        "RSS.ReadArticle": p["fg"],
+        "RSS.UnreadArticle": p["accent"],
+        "TransferList.Downloading": p["green"],
+        "TransferList.StalledDownloading": p["green"],
+        "TransferList.DownloadingMetadata": p["green"],
+        "TransferList.ForcedDownloadingMetadata": p["green"],
+        "TransferList.ForcedDownloading": p["green"],
+        "TransferList.Uploading": p["accent"],
+        "TransferList.StalledUploading": p["accent"],
+        "TransferList.ForcedUploading": p["accent"],
+        "TransferList.QueuedDownloading": p["yellow"],
+        "TransferList.QueuedUploading": p["yellow"],
+        "TransferList.CheckingDownloading": p["blue"],
+        "TransferList.CheckingUploading": p["blue"],
+        "TransferList.CheckingResumeData": p["blue"],
+        "TransferList.StoppedDownloading": p["fg_muted"],
+        "TransferList.StoppedUploading": p["fg_muted"],
+        "TransferList.Moving": p["accent"],
+        "TransferList.MissingFiles": p["red"],
+        "TransferList.Error": p["red"],
+    }
+    return json.dumps({"colors": colors}, indent=2) + "\n"
+
+
+def gen_vscodium(p):
+    sel = mix(p["accent"], p["frame"], 0.75)
+    hover = mix(p["surface0"], p["fg"], 0.08)
+    b = {k: mix(v, p["fg"], 0.3) for k, v in p.items()}
+    colors = {
+        "titleBar.activeBackground": p["surface0"],
+        "titleBar.activeForeground": p["fg"],
+        "titleBar.inactiveBackground": p["frame"],
+        "titleBar.inactiveForeground": p["fg_muted"],
+        "window.activeBorder": p["surface0"],
+        "window.inactiveBorder": p["surface0"],
+        "editor.background": p["frame"],
+        "editor.foreground": p["fg"],
+        "editor.lineHighlightBackground": p["surface0"],
+        "editor.lineHighlightBorder": "#00000000",
+        "editorCursor.foreground": p["accent"],
+        "editor.selectionBackground": sel,
+        "editor.inactiveSelectionBackground": sel,
+        "editor.selectionHighlightBackground": mix(p["accent"], p["frame"], 0.85),
+        "editor.wordHighlightBackground": mix(p["accent"], p["frame"], 0.85),
+        "editor.wordHighlightStrongBackground": mix(p["accent"], p["frame"], 0.85),
+        "editor.findMatchBackground": mix(p["yellow"], p["frame"], 0.6),
+        "editor.findMatchHighlightBackground": mix(p["yellow"], p["frame"], 0.75),
+        "editor.findRangeHighlightBackground": mix(p["yellow"], p["frame"], 0.75),
+        "editorWidget.background": p["surface0"],
+        "editorWidget.border": p["surface1"],
+        "editor.hoverWidget.background": p["surface0"],
+        "editor.hoverWidget.border": p["surface1"],
+        "editorSuggestWidget.background": p["surface0"],
+        "editorSuggestWidget.selectedBackground": hover,
+        "editorSuggestWidget.border": p["surface1"],
+        "editorGroupHeader.tabsBackground": p["frame"],
+        "editorGroupHeader.tabsBorder": p["surface0"],
+        "editorGroup.border": p["surface0"],
+        "tab.activeBackground": p["surface0"],
+        "tab.activeForeground": p["fg"],
+        "tab.activeBorder": p["accent"],
+        "tab.inactiveBackground": p["frame"],
+        "tab.inactiveForeground": p["fg_muted"],
+        "tab.hoverBackground": p["surface0"],
+        "tab.hoverForeground": p["fg"],
+        "tab.border": p["surface1"],
+        "tab.unfocusedActiveBackground": p["surface0"],
+        "tab.unfocusedInactiveBackground": p["frame"],
+        "activityBar.background": p["surface0"],
+        "activityBar.foreground": p["fg"],
+        "activityBar.inactiveForeground": p["fg_muted"],
+        "activityBar.activeBorder": p["accent"],
+        "activityBar.border": p["surface1"],
+        "activityBarBadge.background": p["accent"],
+        "activityBarBadge.foreground": p["accent_fg"],
+        "sideBar.background": p["surface0"],
+        "sideBar.foreground": p["fg"],
+        "sideBar.border": p["surface1"],
+        "sideBarSectionHeader.background": p["surface1"],
+        "sideBarSectionHeader.foreground": p["fg"],
+        "sideBarSectionHeader.border": p["surface1"],
+        "sideBarTitle.foreground": p["fg"],
+        "statusBar.background": p["surface0"],
+        "statusBar.foreground": p["fg"],
+        "statusBar.border": p["surface1"],
+        "statusBarItem.hoverBackground": hover,
+        "statusBarItem.activeBackground": hover,
+        "statusBarItem.prominentBackground": p["accent"],
+        "statusBarItem.prominentForeground": p["accent_fg"],
+        "statusBarItem.errorBackground": p["accent_fg"],
+        "statusBarItem.errorForeground": p["accent_fg"],
+        "statusBarItem.warningBackground": p["accent_fg"],
+        "statusBarItem.warningForeground": p["accent_fg"],
+        "statusBar.debuggingBackground": p["accent"],
+        "statusBar.debuggingForeground": p["accent_fg"],
+        "panel.background": p["frame"],
+        "panel.border": p["surface1"],
+        "panelTitle.activeForeground": p["fg"],
+        "panelTitle.inactiveForeground": p["fg_muted"],
+        "panelTitle.activeBorder": p["accent"],
+        "terminal.background": p["frame"],
+        "terminal.foreground": p["fg"],
+        "terminal.ansiBlack": p["surface0"],
+        "terminal.ansiRed": p["red"],
+        "terminal.ansiGreen": p["green"],
+        "terminal.ansiYellow": p["yellow"],
+        "terminal.ansiBlue": p["blue"],
+        "terminal.ansiMagenta": p["magenta"],
+        "terminal.ansiCyan": p["cyan"],
+        "terminal.ansiWhite": p["fg_window"],
+        "terminal.ansiBrightBlack": p["surface1"],
+        "terminal.ansiBrightRed": b["red"],
+        "terminal.ansiBrightGreen": b["green"],
+        "terminal.ansiBrightYellow": b["yellow"],
+        "terminal.ansiBrightBlue": b["blue"],
+        "terminal.ansiBrightMagenta": b["magenta"],
+        "terminal.ansiBrightCyan": b["cyan"],
+        "terminal.ansiBrightWhite": p["fg"],
+        "terminalCursor.background": p["frame"],
+        "terminalCursor.foreground": p["accent"],
+        "input.background": p["frame"],
+        "input.foreground": p["fg"],
+        "input.border": p["surface1"],
+        "input.placeholderForeground": p["fg_muted"],
+        "inputOption.activeBorder": p["accent"],
+        "dropdown.background": p["surface0"],
+        "dropdown.foreground": p["fg"],
+        "dropdown.border": p["surface1"],
+        "button.background": p["accent"],
+        "button.foreground": p["accent_fg"],
+        "button.hoverBackground": p["accent_hover"],
+        "button.secondaryBackground": p["surface1"],
+        "button.secondaryForeground": p["fg"],
+        "button.secondaryHoverBackground": p["surface1"],
+        "checkbox.background": p["surface0"],
+        "checkbox.foreground": p["fg"],
+        "checkbox.border": p["surface1"],
+        "list.activeSelectionBackground": p["surface1"],
+        "list.activeSelectionForeground": p["fg"],
+        "list.inactiveSelectionBackground": p["surface1"],
+        "list.inactiveSelectionForeground": p["fg"],
+        "list.hoverBackground": hover,
+        "list.hoverForeground": p["fg"],
+        "list.focusBackground": hover,
+        "list.focusForeground": p["fg"],
+        "list.highlightForeground": p["accent"],
+        "list.filterMatchBackground": mix(p["yellow"], p["frame"], 0.6),
+        "tree.indentGuidesStroke": p["surface1"],
+        "tree.inactiveIndentGuidesStroke": p["surface1"],
+        "menu.background": p["surface0"],
+        "menu.foreground": p["fg"],
+        "menu.separatorBackground": p["surface1"],
+        "menubar.selectionBackground": hover,
+        "menubar.selectionForeground": p["fg"],
+        "notificationCenterHeader.background": p["surface1"],
+        "notificationCenterBody.background": p["surface0"],
+        "notificationToast.background": p["surface0"],
+        "notification.background": p["surface0"],
+        "notification.foreground": p["fg"],
+        "notificationLink.foreground": p["blue"],
+        "badge.background": p["accent"],
+        "badge.foreground": p["accent_fg"],
+        "scrollbarSlider.background": mix(p["frame"], p["fg_muted"], 0.3),
+        "scrollbarSlider.hoverBackground": mix(p["frame"], p["fg_muted"], 0.5),
+        "scrollbarSlider.activeBackground": p["accent"],
+        "scrollbar.shadow": "#00000000",
+        "gitDecoration.addedResourceForeground": p["green"],
+        "gitDecoration.modifiedResourceForeground": p["blue"],
+        "gitDecoration.deletedResourceForeground": p["red"],
+        "gitDecoration.renamedResourceForeground": p["green"],
+        "gitDecoration.untrackedResourceForeground": p["green"],
+        "gitDecoration.ignoredResourceForeground": p["fg_muted"],
+        "gitDecoration.conflictingResourceForeground": p["yellow"],
+        "editorGutter.addedBackground": p["green"],
+        "editorGutter.modifiedBackground": p["blue"],
+        "editorGutter.deletedBackground": p["red"],
+        "diffEditor.insertedTextBackground": mix(p["green"], p["frame"], 0.85),
+        "diffEditor.removedTextBackground": mix(p["red"], p["frame"], 0.85),
+        "diffEditor.insertedLineBackground": mix(p["green"], p["frame"], 0.92),
+        "diffEditor.removedLineBackground": mix(p["red"], p["frame"], 0.92),
+        "focusBorder": p["accent"],
+        "inputValidation.infoBorder": p["blue"],
+        "inputValidation.warningBorder": p["yellow"],
+        "inputValidation.errorBorder": p["red"],
+        "editorError.foreground": p["red"],
+        "editorWarning.foreground": p["yellow"],
+        "editorInfo.foreground": p["blue"],
+        "editorHint.foreground": p["fg_muted"],
+        "errorForeground": p["red"],
+        "descriptionForeground": p["fg_muted"],
+        "progressBar.background": p["accent"],
+        "editorBracketHighlight.foreground1": p["accent"],
+        "editorBracketHighlight.foreground2": p["blue"],
+        "editorBracketHighlight.foreground3": p["green"],
+        "editorBracketHighlight.foreground4": p["yellow"],
+        "editorBracketHighlight.foreground5": p["magenta"],
+        "editorBracketHighlight.foreground6": p["cyan"],
+        "editorBracketHighlight.unexpectedBracket.foreground": p["red"],
+        "editorIndentGuide.background1": p["surface1"],
+        "editorIndentGuide.activeBackground1": p["fg_muted"],
+        "editorRuler.foreground": p["surface1"],
+        "editorLineNumber.foreground": p["fg_muted"],
+        "editorLineNumber.activeForeground": p["fg"],
+        "editorWhitespace.foreground": p["surface1"],
+        "sash.hoverBorder": p["accent"],
+        "debugToolBar.background": p["surface0"],
+        "debugToolBar.border": p["surface1"],
+        "welcomePage.progress.background": p["surface1"],
+        "walkThrough.embeddedEditorBackground": p["frame"],
+        "welcomePage.buttonBackground": p["surface1"],
+        "welcomePage.buttonHoverBackground": p["surface1"],
+        "welcomePage.buttonBorder": p["surface1"],
+        "welcomePage.tileBackground": p["surface0"],
+        "welcomePage.tileBorder": p["surface1"],
+        "welcomePage.tileHoverBackground": p["surface1"],
+        "breadcrumb.foreground": p["fg_muted"],
+        "breadcrumb.activeSelectionForeground": p["fg"],
+        "breadcrumb.focusForeground": p["accent"],
+        "breadcrumbPicker.background": p["surface0"],
+        "settings.headerForeground": p["fg"],
+        "settings.modifiedItemIndicator": p["accent"],
+        "settings.checkboxBackground": p["surface0"],
+        "settings.checkboxForeground": p["fg"],
+        "settings.checkboxBorder": p["surface1"],
+        "settings.textInputBackground": p["frame"],
+        "settings.textInputForeground": p["fg"],
+        "settings.textInputBorder": p["surface1"],
+        "settings.numberInputBackground": p["frame"],
+        "settings.numberInputForeground": p["fg"],
+        "settings.numberInputBorder": p["surface1"],
+        "settings.dropdownBackground": p["surface0"],
+        "settings.dropdownListBorder": p["surface1"],
+        "settings.rowHoverBackground": hover,
+        "settings.focusedRowBackground": hover,
+    }
+    tokens = [
+        {"name": "Comments", "scope": ["comment", "punctuation.definition.comment"], "settings": {"foreground": p["fg_muted"], "fontStyle": "italic"}},
+        {"name": "Keywords", "scope": ["keyword", "keyword.control", "storage", "storage.type", "storage.modifier"], "settings": {"foreground": p["accent"]}},
+        {"name": "Operators", "scope": ["keyword.operator", "keyword.operator.logical", "punctuation.accessor"], "settings": {"foreground": p["fg_window"]}},
+        {"name": "Strings", "scope": ["string", "string.template", "punctuation.definition.string"], "settings": {"foreground": p["green"]}},
+        {"name": "Escape", "scope": ["constant.character.escape", "string.escape"], "settings": {"foreground": p["cyan"]}},
+        {"name": "Regex", "scope": ["string.regexp", "constant.character.character-class"], "settings": {"foreground": p["magenta"]}},
+        {"name": "Numbers", "scope": ["constant.numeric", "constant.other"], "settings": {"foreground": p["yellow"]}},
+        {"name": "Constant language", "scope": ["constant.language", "constant.rgb-value", "constant.other.color"], "settings": {"foreground": p["yellow"]}},
+        {"name": "Functions", "scope": ["entity.name.function", "support.function", "support.constant.handlebars", "entity.name.operator.custom-literal"], "settings": {"foreground": p["blue"]}},
+        {"name": "Types", "scope": ["support.class", "support.type", "entity.name.type", "entity.name.namespace", "entity.other.inherited-class", "entity.name.class", "entity.name.scope-resolution"], "settings": {"foreground": p["cyan"]}},
+        {"name": "Variables", "scope": ["variable", "meta.definition.variable.name", "support.variable", "entity.name.variable"], "settings": {"foreground": p["fg"]}},
+        {"name": "Parameters", "scope": ["variable.parameter"], "settings": {"foreground": p["fg"]}},
+        {"name": "Object keys", "scope": ["meta.object-literal.key", "support.constant.property-value", "support.constant.font-name", "support.constant.media-type"], "settings": {"foreground": p["blue"]}},
+        {"name": "Enum members", "scope": ["variable.other.constant", "variable.other.enummember"], "settings": {"foreground": p["yellow"]}},
+        {"name": "PP / preprocessor", "scope": ["preprocessor", "keyword.control.import", "keyword.control.package"], "settings": {"foreground": p["magenta"]}},
+        {"name": "Tags", "scope": ["entity.name.tag"], "settings": {"foreground": p["red"]}},
+        {"name": "Attributes", "scope": ["entity.other.attribute-name"], "settings": {"foreground": p["yellow"]}},
+        {"name": "Punctuation", "scope": ["punctuation", "meta.delimiter"], "settings": {"foreground": p["fg_window"]}},
+        {"name": "Invalid", "scope": ["invalid", "invalid.illegal"], "settings": {"foreground": p["red"], "fontStyle": "underline"}},
+        {"name": "Markdown heading", "scope": ["markup.heading"], "settings": {"foreground": p["accent"], "fontStyle": "bold"}},
+        {"name": "Markdown bold", "scope": ["markup.bold"], "settings": {"foreground": p["fg"], "fontStyle": "bold"}},
+        {"name": "Markdown italic", "scope": ["markup.italic"], "settings": {"foreground": p["fg"], "fontStyle": "italic"}},
+        {"name": "Markdown links", "scope": ["markup.underline.link", "constant.other.reference.link", "string.other.link"], "settings": {"foreground": p["blue"], "fontStyle": "underline"}},
+        {"name": "Markdown quote", "scope": ["markup.quote"], "settings": {"foreground": p["fg_muted"], "fontStyle": "italic"}},
+        {"name": "Markdown raw", "scope": ["markup.raw.inline", "markup.inline.raw"], "settings": {"foreground": p["green"]}},
+        {"name": "Markdown list", "scope": ["markup.list"], "settings": {"foreground": p["accent"]}},
+        {"name": "Diff added", "scope": ["markup.inserted"], "settings": {"foreground": p["green"]}},
+        {"name": "Diff deleted", "scope": ["markup.deleted"], "settings": {"foreground": p["red"]}},
+        {"name": "CSS property", "scope": ["support.type.property-name.css", "support.type.property-name", "support.constant.property-value"], "settings": {"foreground": p["accent"]}},
+        {"name": "CSS class", "scope": ["entity.other.attribute-name.class", "entity.name.tag.css"], "settings": {"foreground": p["blue"]}},
+        {"name": "Sass variable", "scope": ["variable.other.scss", "variable.scss", "variable.other.less"], "settings": {"foreground": p["magenta"]}},
+        {"name": "JSX/TSX tag", "scope": ["punctuation.definition.tag.begin.js", "punctuation.definition.tag.end.js", "meta.tag.sgml"], "settings": {"foreground": p["fg_muted"]}},
+        {"name": "Python decorator", "scope": ["entity.name.function.decorator", "keyword.control.decorator"], "settings": {"foreground": p["magenta"]}},
+        {"name": "Function call support", "scope": ["support.function.any-method", "meta.function-call", "punctuation.definition.function-call"], "settings": {"foreground": p["fg"]}},
+    ]
+    semantic = {
+        "comment": {"foreground": p["fg_muted"], "fontStyle": "italic"},
+        "string": {"foreground": p["green"]},
+        "number": {"foreground": p["yellow"]},
+        "boolean": {"foreground": p["yellow"]},
+        "keyword": {"foreground": p["accent"]},
+        "operator": {"foreground": p["fg_window"]},
+        "property": {"foreground": p["blue"]},
+        "parameter": {"foreground": p["fg"]},
+        "variable": {"foreground": p["fg"]},
+        "function": {"foreground": p["blue"]},
+        "method": {"foreground": p["blue"]},
+        "type": {"foreground": p["cyan"]},
+        "class": {"foreground": p["cyan"]},
+        "interface": {"foreground": p["cyan"]},
+        "enum": {"foreground": p["yellow"]},
+        "enumMember": {"foreground": p["yellow"]},
+        "namespace": {"foreground": p["cyan"]},
+        "decorator": {"foreground": p["magenta"]},
+        "macro": {"foreground": p["magenta"]},
+        "event": {"foreground": p["blue"]},
+        "typeParameter": {"foreground": p["cyan"]},
+        "label": {"foreground": p["fg_muted"]},
+        "regexp": {"foreground": p["magenta"]},
+        "escapeCharacter": {"foreground": p["cyan"]},
+        "modifier": {"foreground": p["accent"]},
+    }
+    return {
+        "$schema": "vscode://schemas/color-theme",
+        "name": "Material You",
+        "type": "dark" if sum(hex2rgb(p["bg"])) * 256 // 768 < 128 else "light",
+        "colors": colors,
+        "tokenColors": tokens,
+        "semanticTokenColors": semantic,
+    }
+
+
+def gen_fastfetch(p):
+    try:
+        with open(FASTFETCH) as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        cfg = json.loads(json.dumps(DEFAULT_FASTFETCH))
+    cfg["colors"] = {
+        "title": p["accent"],
+        "keys": p["blue"],
+        "dots": p["fg"],
+        "section": p["accent"],
+        "danger": p["red"],
+        "warning": p["yellow"],
+        "success": p["green"],
+    }
+    cfg.setdefault("display", {}).setdefault("color", {})["separator"] = p["fg_muted"]
+    return json.dumps(cfg, indent=4) + "\n"
+
+
+def obsidian_block(name, p):
+    r, g, b = hex2rgb(p["accent"])
+    return f""".theme-{name} {{
+  --color-base-00: {p['bg']};
+  --color-base-10: {p['surface0']};
+  --color-base-20: {p['surface0']};
+  --color-base-25: {p['surface1']};
+  --color-base-30: {mix(p['surface1'], p['fg'], 0.06)};
+  --color-base-35: {p['hover']};
+  --color-base-40: {p['fg_muted']};
+  --color-base-50: {p['fg_muted']};
+  --color-base-60: {p['fg_window']};
+  --color-base-70: {p['fg_window']};
+  --color-base-100: {p['fg']};
+  --text-normal: {p['fg']};
+  --text-muted: {p['fg_muted']};
+  --text-faint: {p['fg_muted']};
+  --interactive-accent: {p['accent']};
+  --interactive-accent-hover: {p['accent_hover']};
+  --interactive-accent-rgb: {r}, {g}, {b};
+  --text-on-accent: {p['accent_fg']};
+}}
+"""
+
+
+def check_deps():
+    plasmoid = "/usr/share/plasma/plasmoids/luisbocanegra.kdematerialyou.colors"
+    user_plasmoid = os.path.expanduser("~/.local/share/plasma/plasmoids/luisbocanegra.kdematerialyou.colors")
+    if not (os.path.isdir(plasmoid) or os.path.isdir(user_plasmoid)):
+        sys.exit("missing KDE Material You widget: install luisbocanegra/kde-material-you-colors "
+                 "(https://github.com/luisbocanegra/kde-material-you-colors) first")
+    if subprocess.run(["which", "kde-material-you-colors"], capture_output=True).returncode != 0:
+        sys.exit("kde-material-you-colors binary not in PATH: install luisbocanegra/kde-material-you-colors first")
+    if subprocess.run(["pgrep", "-f", "kde-material-you-colors"], capture_output=True).returncode != 0:
+        sys.exit("kde-material-you-colors daemon not running: add the widget to your panel/desktop and enable it")
+    for scheme in ("MaterialYouDark.colors", "MaterialYouLight.colors"):
+        if not os.path.exists(os.path.join(SCHEMES, scheme)):
+            sys.exit(f"missing source scheme {scheme}: let the KDE Material You widget generate it from your wallpaper")
+
+
+def main():
+    if sys.argv[1:] and sys.argv[1] in ("--check", "-c"):
+        return check()
+    check_deps()
+    active = sys.argv[1] if sys.argv[1:] and not sys.argv[1].startswith("-") else None
+    if active:
+        name = os.path.basename(active)
+    else:
+        active, name = active_scheme()
+    dark = read_scheme(os.path.join(SCHEMES, "MaterialYouDark.colors"))
+    light = read_scheme(os.path.join(SCHEMES, "MaterialYouLight.colors"))
+    pal = dark if "MaterialYouDark" in name else light
+    print("frame (titlebar):", pal["frame"])
+    print("palette:", palette_swatch(pal))
+
+    with open(ALACRITTY, "w") as f:
+        f.write(gen_alacritty(pal))
+    os.makedirs(os.path.dirname(OPENCODE), exist_ok=True)
+    with open(OPENCODE, "w") as f:
+        f.write(gen_opencode(dark, light))
+    os.makedirs(os.path.dirname(OBSIDIAN), exist_ok=True)
+    with open(OBSIDIAN, "w") as f:
+        f.write("/* Generated by theme-sync. Re-run theme-sync after changing wallpaper. */\n")
+        f.write(obsidian_block("dark", dark))
+        f.write("\n")
+        f.write(obsidian_block("light", light))
+    os.makedirs(os.path.dirname(BTOP), exist_ok=True)
+    with open(BTOP, "w") as f:
+        f.write(gen_btop(pal))
+    with open(FASTFETCH, "w") as f:
+        f.write(gen_fastfetch(pal))
+    os.makedirs(os.path.dirname(VICINAE), exist_ok=True)
+    with open(VICINAE, "w") as f:
+        f.write(gen_vicinae(pal))
+    os.makedirs(os.path.dirname(QBITTORRENT), exist_ok=True)
+    with open(QBITTORRENT, "w") as f:
+        f.write(gen_qbittorrent(pal))
+    set_qbit_theme(pal)
+    set_vscodium_theme(pal)
+    print(f"synced from {name}:")
+    print(f"  alacritty → {ALACRITTY}")
+    print(f"  opencode  → {OPENCODE}")
+    print(f"  obsidian  → {OBSIDIAN}")
+    print(f"  btop      → {BTOP}")
+    print(f"  fastfetch → {FASTFETCH}")
+    print(f"  vicinae   → {VICINAE}")
+    print(f"  qbittorrent → {QBITTORRENT}")
+    print(f"  vscodium    → {VSCODIUM_THEME}")
+    check()
+    subprocess.run(["systemctl", "--user", "restart", "vicinae"], check=True, capture_output=True)
+    print("restarted vicinae daemon")
+    if subprocess.run(["pgrep", "-x", "qbittorrent"], capture_output=True).returncode == 0:
+        subprocess.run(["killall", "qbittorrent"], capture_output=True)
+        subprocess.Popen(["qbittorrent"], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("restarted qbittorrent")
+    if subprocess.run(["pgrep", "-x", "codium"], capture_output=True).returncode == 0:
+        subprocess.run(["killall", "codium"], capture_output=True)
+        subprocess.Popen(["codium"], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("restarted codium")
+
+
+def set_qbit_theme(p):
+    conf = ""
+    try:
+        with open(QBIT_CONF) as f:
+            conf = f.read()
+    except OSError:
+        pass
+    path = re.sub(r"^General\\CustomUIThemePath=.*$", lambda m: "General\\CustomUIThemePath=" + QBITTORRENT, conf, flags=re.M)
+    path = re.sub(r"^General\\UseCustomUITheme=.*$", lambda m: "General\\UseCustomUITheme=true", path, flags=re.M)
+    with open(QBIT_CONF, "w") as f:
+        f.write(path)
+
+
+def set_vscodium_theme(p):
+    theme = gen_vscodium(p)
+    is_dark = theme["type"] == "dark"
+    pkg = {
+        "name": "material-you-theme",
+        "displayName": "Material You",
+        "description": "Material You color theme generated by theme-sync.",
+        "version": "1.0.0",
+        "publisher": "theme-sync",
+        "engines": {"vscode": "^1.70.0"},
+        "categories": ["Themes"],
+        "contributes": {
+            "themes": [{"label": "Material You", "uiTheme": "vs-dark" if is_dark else "vs-light", "path": "./themes/material-you-color-theme.json"}]
+        },
+    }
+    os.makedirs(os.path.dirname(VSCODIUM_THEME), exist_ok=True)
+    with open(VSCODIUM_THEME, "w") as f:
+        json.dump(theme, f, indent=4)
+        f.write("\n")
+    with open(VSCODIUM_PKG, "w") as f:
+        json.dump(pkg, f, indent=4)
+        f.write("\n")
+    try:
+        with open(VSCODIUM) as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        cfg = {}
+    cfg.pop("workbench.colorCustomizations", None)
+    cfg["workbench.colorTheme"] = "Material You"
+    with open(VSCODIUM, "w") as f:
+        json.dump(cfg, f, indent=4)
+        f.write("\n")
+
+
+def check():
+    _, name = active_scheme()
+    accent = read_scheme(os.path.join(SCHEMES, name + ".colors"))["accent"]
+    dark_accent = read_scheme(os.path.join(SCHEMES, "MaterialYouDark.colors"))["accent"]
+    with open(ALACRITTY) as f:
+        a = f.read()
+    match = re.search(r"^background = '([^']+)'", a, re.M)
+    assert match, "alacritty theme missing header"
+    a_bg = match.group(1)
+    with open(OPENCODE) as f:
+        o = json.load(f)
+    key = "dark" if "Dark" in name else "light"
+    oc_bg = o["theme"]["background"][key]
+    with open(OBSIDIAN) as f:
+        obs = f.read()
+    with open(BTOP) as f:
+        bt = f.read()
+    m = re.search(r"^theme\[main_bg\]=\"#([0-9a-fA-F]{6})\"", bt, re.M)
+    assert m, "btop theme missing main_bg"
+    bt_bg = "#" + m.group(1)
+    with open(FASTFETCH) as f:
+        ff = json.load(f)
+    with open(VICINAE) as f:
+        vi = f.read()
+    vm = re.search(r"^background = \"#([0-9a-fA-F]{6})\"", vi, re.M)
+    assert vm, "vicinae theme missing background"
+    vi_bg = "#" + vm.group(1)
+    assert a_bg == oc_bg == bt_bg == vi_bg, f"terminal backgrounds diverge: {a_bg} {oc_bg} {bt_bg} {vi_bg}"
+    assert accent in a, "alacritty accent out of sync"
+    assert o["theme"]["primary"]["dark"] == dark_accent, "opencode theme out of sync"
+    assert ".theme-dark" in obs and ".theme-light" in obs and accent in obs, "obsidian theme out of sync"
+    assert f"theme[title]=\"#{accent[1:]}\"" in bt, "btop theme out of sync"
+    assert ff["colors"]["title"] == accent, "fastfetch theme out of sync"
+    assert f"accent = \"#{accent[1:]}\"" in vi, "vicinae theme out of sync"
+    with open(QBITTORRENT) as f:
+        qb = json.load(f)
+    assert qb["colors"]["Palette.Highlight"] == accent, "qbittorrent theme out of sync"
+    with open(QBIT_CONF) as f:
+        qconf = f.read()
+    assert "General\\UseCustomUITheme=true" in qconf and QBITTORRENT in qconf, "qbittorrent conf not pointing at theme"
+    with open(VSCODIUM) as f:
+        vsc = json.load(f)
+    assert vsc.get("workbench.colorTheme") == "Material You", "vscodium not using Material You theme"
+    assert "workbench.colorCustomizations" not in vsc, "vscodium still has stale colorCustomizations"
+    with open(VSCODIUM_THEME) as f:
+        vt = json.load(f)
+    assert vt["colors"]["editor.background"] == a_bg, "vscodium theme out of sync"
+    assert any(r.get("settings", {}).get("foreground") == accent for r in vt["tokenColors"]), "vscodium theme accent missing"
+    print(f"check ok: all 8 themes match {name} ({accent}); shared bg {a_bg}")
+
+
+if __name__ == "__main__":
+    main()
