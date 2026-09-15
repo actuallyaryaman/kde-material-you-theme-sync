@@ -37,14 +37,5 @@ then add the **KDE Material You Colors** Plasma 6 widget from the KDE Store.
 | qbittorrent    | `~/.config/qBittorrent/themes/material-you/config.json`       |
 | VSCodium       | `~/.vscode-oss/extensions/theme-sync.material-you-theme-…`    |
 
-## Layout
-
-```
-scripts/   the script
-config/    titlebar calibration (scale / override)
-schemes/   source KDE MaterialYou schemes (dark + light)
-apps/      generated themes, one directory per app
-```
-
 The titlebar frame = WM active background darkened to `scale` (default `0.59`).
 If the frame looks off, override it in `config/knobs.conf`.
